@@ -7,7 +7,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import re
 
-from scipy.stats import shapiro, f_oneway, kruskal, mannwhitneyu
+from scipy.stats import shapiro, f_oneway, kruskal, mannwhitneyu, ttest_ind
 from collections import defaultdict
 from Sprint import Sprint
 from itertools import combinations
@@ -432,7 +432,6 @@ def plot_graphs():
                         rollover_mapping = dict(zip(grouped[project]["eli"], rollover_values))
                         non_mapping = dict(zip(grouped[project]["eli_non_rollover"], non_values))
 
-                        # --- Plot Rollover (Carry Over) ---
                         n_cols, n_rows = 3, 2
                         subplot_height = 4
                         subplot_width = max(5, len(rollover_labels) * 0.6)
@@ -448,49 +447,12 @@ def plot_graphs():
                                 val = rollover_mapping[file_name]
                                 sprint_vals.append(val)
                                 arr = np.array(val)
-                                f_md.write(f"{label}: n={len(arr)}, min={arr.min():.2f}, max={arr.max():.2f}, mean={arr.mean():.2f}, median={np.median(arr):.2f}\n")
-
-                            all_groups = [np.array(v) for v in sprint_vals]
-                            if sprint_idx == 0:
-                                project_groups = {}
-                                for gidx, label in enumerate(rollover_labels):
-                                    combined = []
-                                    for s_idx in range(5):
-                                        fname = grouped[project]["eli"][s_idx + gidx * 5]
-                                        combined.extend(rollover_mapping[fname])
-                                    project_groups[label] = np.array(combined)
-
-                                f_md.write("\nPROJECT-WIDE SUMMARY (Carry Over, all sprints combined)\n\n")
-                                for label, arr in project_groups.items():
-                                    f_md.write(f"{label}: n={len(arr)}, min={arr.min():.2f}, max={arr.max():.2f}, mean={arr.mean():.2f}, median={np.median(arr):.2f}\n")
-
-                                all_vals = list(project_groups.values())
-                                all_labels = list(project_groups.keys())
-                                normality = [shapiro(v)[1] > 0.05 for v in all_vals]
-
-                                f_stat.write("\nPROJECT-WIDE STATS (Carry Over)\n\n")
-                                if all(normality):
-                                    f_stat.write("All groups normal - ANOVA\n")
-                                    fval, pval = f_oneway(*all_vals)
-                                    f_stat.write(f"F={fval:.4f}, p={pval:.4f}\n")
-                                else:
-                                    f_stat.write("Not all groups normal - Kruskal-Wallis\n")
-                                    hval, pval = kruskal(*all_vals)
-                                    f_stat.write(f"H={hval:.4f}, p={pval:.4f}\n")
-                                    f_stat.write("Pairwise Mann-Whitney U (Holm corrected)\n")
-                                    pvals = []
-                                    pairs = []
-                                    for i, j in combinations(range(len(all_vals)), 2):
-                                        u, p = mannwhitneyu(all_vals[i], all_vals[j], alternative='two-sided')
-                                        pvals.append(p)
-                                        pairs.append((all_labels[i], all_labels[j]))
-                                    corrected = holm_correction(pvals)
-                                    for idx, (l1, l2) in enumerate(pairs):
-                                        f_stat.write(f"{l1} vs {l2}: corrected p={corrected[idx]:.4f}\n")
-                                f_stat.write("\n")
+                                f_md.write(f"{label}: n={len(arr)}, min={arr.min():.2f}, max={arr.max():.2f}, "
+                                        f"mean={arr.mean():.2f}, median={np.median(arr):.2f}\n")
 
                             ax = axes[sprint_idx]
-                            ax.boxplot(sprint_vals, tick_labels=rollover_labels, patch_artist=True, boxprops=dict(facecolor="lightblue"))
+                            ax.boxplot(sprint_vals, tick_labels=rollover_labels, patch_artist=True,
+                                    boxprops=dict(facecolor="lightblue"))
                             ax.set_title(f"Sprint {sprint_idx + 1}", fontsize=12)
                             ax.set_xlabel("Elicitations", fontsize=12)
                             ax.tick_params(axis='x', rotation=45, labelsize=12)
@@ -508,9 +470,14 @@ def plot_graphs():
                         for ax in second_row_axes:
                             pos = ax.get_position()
                             ax.set_position([pos.x0 + shift, pos.y0, pos.width, pos.height])
-                        fig.suptitle(f"Project {project.replace('proj','')} - Varying Elicitations (Carry-Over)", fontsize=14, y=1.03)
-                        fig.savefig(os.path.join("plots", "png", f"{project.replace('proj','proj_')}_eli_rollover_{metric}_all_sprints.png"), bbox_inches='tight', pad_inches=0.5)
-                        fig.savefig(os.path.join("plots", "pdf", f"{project.replace('proj','proj_')}_eli_rollover_{metric}_all_sprints.pdf"), bbox_inches='tight', pad_inches=0.5)
+                        fig.suptitle(f"Project {project.replace('proj','')} - Varying Elicitations (Carry-Over)",
+                                    fontsize=14, y=1.03)
+                        fig.savefig(os.path.join("plots", "png",
+                                                f"{project.replace('proj','proj_')}_eli_rollover_{metric}_all_sprints.png"),
+                                    bbox_inches='tight', pad_inches=0.5)
+                        fig.savefig(os.path.join("plots", "pdf",
+                                                f"{project.replace('proj','proj_')}_eli_rollover_{metric}_all_sprints.pdf"),
+                                    bbox_inches='tight', pad_inches=0.5)
                         plt.close(fig)
 
                         n_cols, n_rows = 3, 2
@@ -528,49 +495,12 @@ def plot_graphs():
                                 val = non_mapping[file_name]
                                 sprint_vals.append(val)
                                 arr = np.array(val)
-                                f_md.write(f"{label}: n={len(arr)}, min={arr.min():.2f}, max={arr.max():.2f}, mean={arr.mean():.2f}, median={np.median(arr):.2f}\n")
-
-                            all_groups = [np.array(v) for v in sprint_vals]
-                            if sprint_idx == 0:
-                                project_groups = {}
-                                for gidx, label in enumerate(non_labels):
-                                    combined = []
-                                    for s_idx in range(5):
-                                        fname = grouped[project]["eli_non_rollover"][s_idx + gidx * 5]
-                                        combined.extend(non_mapping[fname])
-                                    project_groups[label] = np.array(combined)
-
-                                f_md.write("\nPROJECT-WIDE SUMMARY (No Carry Over, all sprints combined)\n\n")
-                                for label, arr in project_groups.items():
-                                    f_md.write(f"{label}: n={len(arr)}, min={arr.min():.2f}, max={arr.max():.2f}, mean={arr.mean():.2f}, median={np.median(arr):.2f}\n")
-
-                                all_vals = list(project_groups.values())
-                                all_labels = list(project_groups.keys())
-                                normality = [shapiro(v)[1] > 0.05 for v in all_vals]
-
-                                f_stat.write("\nPROJECT-WIDE STATS (No Carry Over)\n\n")
-                                if all(normality):
-                                    f_stat.write("All groups normal - ANOVA\n")
-                                    fval, pval = f_oneway(*all_vals)
-                                    f_stat.write(f"F={fval:.4f}, p={pval:.4f}\n")
-                                else:
-                                    f_stat.write("Not all groups normal - Kruskal-Wallis\n")
-                                    hval, pval = kruskal(*all_vals)
-                                    f_stat.write(f"H={hval:.4f}, p={pval:.4f}\n")
-                                    f_stat.write("Pairwise Mann-Whitney U (Holm corrected)\n")
-                                    pvals = []
-                                    pairs = []
-                                    for i, j in combinations(range(len(all_vals)), 2):
-                                        u, p = mannwhitneyu(all_vals[i], all_vals[j], alternative='two-sided')
-                                        pvals.append(p)
-                                        pairs.append((all_labels[i], all_labels[j]))
-                                    corrected = holm_correction(pvals)
-                                    for idx, (l1, l2) in enumerate(pairs):
-                                        f_stat.write(f"{l1} vs {l2}: corrected p={corrected[idx]:.4f}\n")
-                                f_stat.write("\n")
+                                f_md.write(f"{label}: n={len(arr)}, min={arr.min():.2f}, max={arr.max():.2f}, "
+                                        f"mean={arr.mean():.2f}, median={np.median(arr):.2f}\n")
 
                             ax = axes[sprint_idx]
-                            ax.boxplot(sprint_vals, tick_labels=non_labels, patch_artist=True, boxprops=dict(facecolor="lightblue"))
+                            ax.boxplot(sprint_vals, tick_labels=non_labels, patch_artist=True,
+                                    boxprops=dict(facecolor="lightblue"))
                             ax.set_title(f"Sprint {sprint_idx + 1}", fontsize=12)
                             ax.set_xlabel("Number of Elicitations", fontsize=12)
                             ax.tick_params(axis='x', rotation=45, labelsize=12)
@@ -588,10 +518,44 @@ def plot_graphs():
                         for ax in second_row_axes:
                             pos = ax.get_position()
                             ax.set_position([pos.x0 + shift, pos.y0, pos.width, pos.height])
-                        fig.suptitle(f"Project {project.replace('proj','')} - Varying Elicitations (Non-Carry-Over)", fontsize=14, y=1.03)
-                        fig.savefig(os.path.join("plots", "png", f"{project.replace('proj','proj_')}_eli_non_rollover_{metric}_all_sprints.png"), bbox_inches='tight', pad_inches=0.5)
-                        fig.savefig(os.path.join("plots", "pdf", f"{project.replace('proj','proj_')}_eli_non_rollover_{metric}_all_sprints.pdf"), bbox_inches='tight', pad_inches=0.5)
+                        fig.suptitle(f"Project {project.replace('proj','')} - Varying Elicitations (Non-Carry-Over)",
+                                    fontsize=14, y=1.03)
+                        fig.savefig(os.path.join("plots", "png",
+                                                f"{project.replace('proj','proj_')}_eli_non_rollover_{metric}_all_sprints.png"),
+                                    bbox_inches='tight', pad_inches=0.5)
+                        fig.savefig(os.path.join("plots", "pdf",
+                                                f"{project.replace('proj','proj_')}_eli_non_rollover_{metric}_all_sprints.pdf"),
+                                    bbox_inches='tight', pad_inches=0.5)
                         plt.close(fig)
+
+                        f_stat.write("\nPAIRWISE COMPARISON: Carry Over vs Non-Carry Over (Matched Elicitation Levels)\n\n")
+                        for idx, label in enumerate(rollover_labels):
+                            f_stat.write(f"{label} elicitation:\n")
+
+                            carry_vals = []
+                            non_vals = []
+
+                            for s in range(5):
+                                carry_file = grouped[project]["eli"][s + idx * 5]
+                                non_file = grouped[project]["eli_non_rollover"][s + idx * 5]
+                                carry_vals.extend(rollover_mapping[carry_file])
+                                non_vals.extend(non_mapping[non_file])
+
+                            carry_vals = np.array(carry_vals)
+                            non_vals = np.array(non_vals)
+
+                            carry_norm = shapiro(carry_vals)[1] > 0.05
+                            non_norm = shapiro(non_vals)[1] > 0.05
+
+                            if carry_norm and non_norm:
+                                tval, pval = ttest_ind(carry_vals, non_vals, equal_var=False)
+                                f_stat.write(f"  t-test: p={pval:.4f}\n")
+                            else:
+                                u, p = mannwhitneyu(carry_vals, non_vals, alternative='two-sided')
+                                f_stat.write(f"  Mann-Whitney U: p={p:.4f}\n")
+
+                            f_stat.write("\n")
+
 
                     # ====================== mopso ======================
                     elif group_type == "mopso":
