@@ -529,9 +529,11 @@ def plot_graphs():
                         plt.close(fig)
 
                         f_stat.write("\nPAIRWISE COMPARISON: Carry Over vs Non-Carry Over (Matched Elicitation Levels)\n\n")
-                        for idx, label in enumerate(rollover_labels):
-                            f_stat.write(f"{label} elicitation:\n")
 
+                        results = []
+                        pvals = []
+
+                        for idx, label in enumerate(rollover_labels):
                             carry_vals = []
                             non_vals = []
 
@@ -544,19 +546,62 @@ def plot_graphs():
                             carry_vals = np.array(carry_vals)
                             non_vals = np.array(non_vals)
 
-                            carry_norm = shapiro(carry_vals)[1] > 0.05
-                            non_norm = shapiro(non_vals)[1] > 0.05
+                            carry_norm = False
+                            non_norm = False
+                            try:
+                                if len(carry_vals) > 3 and np.std(carry_vals) > 0:
+                                    carry_norm = shapiro(carry_vals)[1] > 0.05
+                            except Exception:
+                                carry_norm = False
+                            try:
+                                if len(non_vals) > 3 and np.std(non_vals) > 0:
+                                    non_norm = shapiro(non_vals)[1] > 0.05
+                            except Exception:
+                                non_norm = False
 
+                            test_name = ""
+                            raw_p = 1.0
                             if carry_norm and non_norm:
-                                tval, pval = ttest_ind(carry_vals, non_vals, equal_var=False)
-                                f_stat.write(f"  t-test: p={pval:.4f}\n")
+                                if len(carry_vals) > 1 and len(non_vals) > 1:
+                                    try:
+                                        tstat, raw_p = ttest_ind(carry_vals, non_vals, equal_var=False)
+                                        test_name = "t-test (Welch)"
+                                    except Exception:
+                                        raw_p = 1.0
+                                        test_name = "t-test (failed)"
+                                else:
+                                    raw_p = 1.0
+                                    test_name = "t-test (insufficient data)"
                             else:
-                                u, p = mannwhitneyu(carry_vals, non_vals, alternative='two-sided')
-                                f_stat.write(f"  Mann-Whitney U: p={p:.4f}\n")
+                                if len(carry_vals) > 1 and len(non_vals) > 1:
+                                    try:
+                                        ustat, raw_p = mannwhitneyu(carry_vals, non_vals, alternative='two-sided')
+                                        test_name = "Mann-Whitney U"
+                                    except Exception:
+                                        raw_p = 1.0
+                                        test_name = "Mann-Whitney U (failed)"
+                                else:
+                                    raw_p = 1.0
+                                    test_name = "Mann-Whitney U (insufficient data)"
 
-                            f_stat.write("\n")
+                            results.append((label, test_name, raw_p))
+                            pvals.append(raw_p)
 
+                        if len(pvals) > 0:
+                            corrected = holm_correction(pvals)
+                        else:
+                            corrected = []
 
+                        f_stat.write("Label | Test | Raw p | Holm-corrected p | Significant (p<0.05)\n")
+                        f_stat.write("-------------------------------------------------------------\n")
+
+                        for i, (label, test_name, raw_p) in enumerate(results):
+                            corr_p = corrected[i] if i < len(corrected) else 1.0
+                            sig = "YES" if corr_p < 0.05 else "NO"
+                            f_stat.write(f"{label}: {test_name} | raw p={raw_p:.4f} | corrected p={corr_p:.4f} | {sig}\n")
+
+                        f_stat.write("\n")
+                        
                     # ====================== mopso ======================
                     elif group_type == "mopso":
                         eli_group = groups["eli"]
